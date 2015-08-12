@@ -83,6 +83,9 @@ var deepEqualTests = []DeepEqualTest{
 	{[]int{}, []int{}, true, false, ""},
 	{[]int(nil), []int(nil), true, false, ""},
 
+	// Nil vs empty: they're not the same
+	{map[string]string(nil), make(map[string]string), false, false, `mismatch at top level: nil vs non-nil mismatch; obtained map\[string\]string\(nil\); expected map\[string\]string\{\}`},
+
 	// Mismatched types
 	{1, 1.0, false, true, `mismatch at top level: type mismatch int vs float64; obtained 1; expected 1`},
 	{int32(1), int64(1), false, true, `mismatch at top level: type mismatch int32 vs int64; obtained 1; expected 1`},
@@ -119,7 +122,7 @@ func TestDeepEqual(t *testing.T) {
 			}
 			incompatible := err.(incompatibler).Incompatible()
 			if incompatible != test.incompatible {
-				t.Errorf("deepEqual(%v, %v); mismatch on incompatible %q, want %q", test.a, test.b, incompatible, test.incompatible)
+				t.Errorf("deepEqual(%v, %v); mismatch on incompatible %t, want %t", test.a, test.b, incompatible, test.incompatible)
 			}
 		}
 	}
@@ -146,7 +149,7 @@ type _Complex struct {
 	d map[float64]float64
 }
 
-func TestDeepEqualComplexStruct(t *testing.T) {
+func TestDeepEqualComplexStructEqual(t *testing.T) {
 	m := make(map[float64]float64)
 	stra, strb := "hello", "hello"
 	a, b := new(_Complex), new(_Complex)
@@ -163,6 +166,17 @@ func TestDeepEqualComplexStructInequality(t *testing.T) {
 	a, b := new(_Complex), new(_Complex)
 	*a = _Complex{5, [3]*_Complex{a, b, a}, &stra, m}
 	*b = _Complex{5, [3]*_Complex{b, a, a}, &strb, m}
+	if deepEqual(a, b) {
+		t.Error("deepEqual(complex different) = true, want false")
+	}
+}
+
+func TestDeepEqualComplexStructNilMapMismatch(t *testing.T) {
+	m := make(map[float64]float64)
+	stra, strb := "hello", "hello"
+	a, b := new(_Complex), new(_Complex)
+	*a = _Complex{5, [3]*_Complex{a, b, a}, &stra, m}
+	*b = _Complex{5, [3]*_Complex{b, a, a}, &strb, nil}
 	if deepEqual(a, b) {
 		t.Error("deepEqual(complex different) = true, want false")
 	}

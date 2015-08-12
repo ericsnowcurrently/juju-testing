@@ -24,9 +24,14 @@ type visit struct {
 }
 
 type mismatchError struct {
-	v1, v2 reflect.Value
-	path   string
-	how    string
+	v1, v2       reflect.Value
+	path         string
+	how          string
+	incompatible bool
+}
+
+func (err *mismatchError) Incompatible() bool {
+	return err.incompatible
 }
 
 func (err *mismatchError) Error() string {
@@ -41,7 +46,7 @@ func (err *mismatchError) Error() string {
 // comparisons that have already been seen, which allows short circuiting on
 // recursive types.
 func deepValueEqual(path string, v1, v2 reflect.Value, visited map[visit]bool, depth int) (ok bool, err error) {
-	errorf := func(f string, a ...interface{}) error {
+	failuref := func(f string, a ...interface{}) error {
 		return &mismatchError{
 			v1:   v1,
 			v2:   v2,
@@ -49,11 +54,17 @@ func deepValueEqual(path string, v1, v2 reflect.Value, visited map[visit]bool, d
 			how:  fmt.Sprintf(f, a...),
 		}
 	}
+	errorf := func(f string, a ...interface{}) error {
+		err := failuref(f, a...)
+		err.(*mismatchError).incompatible = true
+		return err
+	}
+
 	if !v1.IsValid() || !v2.IsValid() {
 		if v1.IsValid() == v2.IsValid() {
 			return true, nil
 		}
-		return false, errorf("validity mismatch")
+		return false, failuref("validity mismatch")
 	}
 	if v1.Type() != v2.Type() {
 		return false, errorf("type mismatch %s vs %s", v1.Type(), v2.Type())
@@ -96,7 +107,7 @@ func deepValueEqual(path string, v1, v2 reflect.Value, visited map[visit]bool, d
 	case reflect.Array:
 		if v1.Len() != v2.Len() {
 			// can't happen!
-			return false, errorf("length mismatch, %d vs %d", v1.Len(), v2.Len())
+			return false, failuref("length mismatch, %d vs %d", v1.Len(), v2.Len())
 		}
 		for i := 0; i < v1.Len(); i++ {
 			if ok, err := deepValueEqual(
@@ -109,7 +120,7 @@ func deepValueEqual(path string, v1, v2 reflect.Value, visited map[visit]bool, d
 	case reflect.Slice:
 		// We treat a nil slice the same as an empty slice.
 		if v1.Len() != v2.Len() {
-			return false, errorf("length mismatch, %d vs %d", v1.Len(), v2.Len())
+			return false, failuref("length mismatch, %d vs %d", v1.Len(), v2.Len())
 		}
 		if v1.Pointer() == v2.Pointer() {
 			return true, nil
@@ -142,10 +153,10 @@ func deepValueEqual(path string, v1, v2 reflect.Value, visited map[visit]bool, d
 		return true, nil
 	case reflect.Map:
 		if v1.IsNil() != v2.IsNil() {
-			return false, errorf("nil vs non-nil mismatch")
+			return false, failuref("nil vs non-nil mismatch")
 		}
 		if v1.Len() != v2.Len() {
-			return false, errorf("length mismatch, %d vs %d", v1.Len(), v2.Len())
+			return false, failuref("length mismatch, %d vs %d", v1.Len(), v2.Len())
 		}
 		if v1.Pointer() == v2.Pointer() {
 			return true, nil
@@ -170,37 +181,37 @@ func deepValueEqual(path string, v1, v2 reflect.Value, visited map[visit]bool, d
 		return false, errorf("non-nil functions")
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		if v1.Int() != v2.Int() {
-			return false, errorf("unequal")
+			return false, failuref("unequal")
 		}
 		return true, nil
 	case reflect.Uint, reflect.Uintptr, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		if v1.Uint() != v2.Uint() {
-			return false, errorf("unequal")
+			return false, failuref("unequal")
 		}
 		return true, nil
 	case reflect.Float32, reflect.Float64:
 		if v1.Float() != v2.Float() {
-			return false, errorf("unequal")
+			return false, failuref("unequal")
 		}
 		return true, nil
 	case reflect.Complex64, reflect.Complex128:
 		if v1.Complex() != v2.Complex() {
-			return false, errorf("unequal")
+			return false, failuref("unequal")
 		}
 		return true, nil
 	case reflect.Bool:
 		if v1.Bool() != v2.Bool() {
-			return false, errorf("unequal")
+			return false, failuref("unequal")
 		}
 		return true, nil
 	case reflect.String:
 		if v1.String() != v2.String() {
-			return false, errorf("unequal")
+			return false, failuref("unequal")
 		}
 		return true, nil
 	case reflect.Chan, reflect.UnsafePointer:
 		if v1.Pointer() != v2.Pointer() {
-			return false, errorf("unequal")
+			return false, failuref("unequal")
 		}
 		return true, nil
 	default:
@@ -220,10 +231,11 @@ func deepValueEqual(path string, v1, v2 reflect.Value, visited map[visit]bool, d
 func DeepEqual(a1, a2 interface{}) (bool, error) {
 	errorf := func(f string, a ...interface{}) error {
 		return &mismatchError{
-			v1:   reflect.ValueOf(a1),
-			v2:   reflect.ValueOf(a2),
-			path: "",
-			how:  fmt.Sprintf(f, a...),
+			v1:           reflect.ValueOf(a1),
+			v2:           reflect.ValueOf(a2),
+			path:         "",
+			how:          fmt.Sprintf(f, a...),
+			incompatible: true,
 		}
 	}
 	if a1 == nil || a2 == nil {

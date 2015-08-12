@@ -110,8 +110,15 @@ var DeepEquals gc.Checker = &deepEqualsChecker{
 }
 
 func (checker *deepEqualsChecker) Check(params []interface{}, names []string) (result bool, error string) {
-	if ok, err := DeepEqual(params[0], params[1]); !ok {
+	ok, err := DeepEqual(params[0], params[1])
+	if err, ok := err.(*mismatchError); ok {
+		if !err.incompatible {
+			return false, ""
+		}
 		return false, err.Error()
 	}
-	return true, ""
+	if err != nil {
+		return false, err.Error()
+	}
+	return ok, ""
 }

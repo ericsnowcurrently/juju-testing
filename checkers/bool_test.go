@@ -116,10 +116,23 @@ func (s *BoolSuite) TestDeepEquals(c *gc.C) {
 		c.Logf("test %d. %v == %v is %v", i, test.a, test.b, test.eq)
 		result, msg := jc.DeepEquals.Check([]interface{}{test.a, test.b}, nil)
 		c.Check(result, gc.Equals, test.eq)
-		if test.eq {
+		if test.eq || !test.incompatible {
 			c.Check(msg, gc.Equals, "")
 		} else {
 			c.Check(msg, gc.Not(gc.Equals), "")
+		}
+	}
+}
+
+func (s *BoolSuite) TestNotDeepEquals(c *gc.C) {
+	for i, test := range deepEqualTests {
+		c.Logf("test %d. %v != %v is %v", i, test.a, test.b, !test.eq)
+		result, msg := gc.Not(jc.DeepEquals).Check([]interface{}{test.a, test.b}, nil)
+		c.Check(result, gc.Not(gc.Equals), test.eq)
+		if test.incompatible {
+			c.Check(msg, gc.Not(gc.Equals), "")
+		} else {
+			c.Check(msg, gc.Equals, "")
 		}
 	}
 }
